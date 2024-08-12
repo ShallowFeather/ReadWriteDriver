@@ -58,20 +58,23 @@ PageTable List[64];
 
 VOID ReadPhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
 {
+
     PageTable* page = &List[Index];
+    _disable();
     page->Pte->PageFrameNumber = phy >> PAGE_SHIFT;
     //DbgPrint("Physical Address: 0x%x\n", phy);
     __invlpg(page->VirtualAddress);
     __movsb((PUCHAR)buffer, (PUCHAR)page->VirtualAddress + (phy & 0xFFF), size);
     page->Pte->PageFrameNumber = page->OldPageFrameNumber;
     __invlpg(page->VirtualAddress);
+    _enable();
 }
 
 VOID WritePhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
 {
     PageTable* page = &List[Index];
+    _disable();
     page->Pte->PageFrameNumber = phy >> PAGE_SHIFT;
-
     //DbgPrint("Physical Address: 0x%x\n", phy);
     __invlpg(page->VirtualAddress);
     __movsb((PUCHAR)page->VirtualAddress + (phy & 0xFFF), (PUCHAR)buffer, size);
@@ -79,6 +82,8 @@ VOID WritePhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
     page->Pte->WriteThrough = 1;
     page->Pte->PageFrameNumber = page->OldPageFrameNumber;
     __invlpg(page->VirtualAddress);
+    _enable();
+
 }
 
 
@@ -131,7 +136,7 @@ VOID ReadVirtualMemory(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress, PVOID 
         ULONG64 PhysicalMemory = TransformationCR3(Index, cr3, VirtualAddress + read);
         if (PhysicalMemory == 0) break;
         ULONG64 _read = min(PAGE_SIZE - (PhysicalMemory & 0xfff), size);
-        DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
+        //DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
         ReadPhysicalAddress(Index, PhysicalMemory, (PVOID)((UINT_PTR)Buffer + read), _read);
         read += _read;
         size -= _read;
@@ -144,7 +149,7 @@ VOID WriteVirtualMemory(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress, PVOID
         ULONG64 PhysicalMemory = TransformationCR3(Index, cr3, VirtualAddress + write);
         if (PhysicalMemory == 0) break;
         ULONG64 _write = min(PAGE_SIZE - (PhysicalMemory & 0xfff), size);
-        DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
+        //DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
         WritePhysicalAddress(Index, PhysicalMemory, (PVOID)((UINT_PTR)Buffer + write), _write);
         write += _write;
         size -= _write;
@@ -171,8 +176,8 @@ NTSTATUS ctl_io(PDEVICE_OBJECT device_obj, PIRP irp) {
                 PsLookupProcessByProcessId((HANDLE)Buffer->target_pid, &Process);
                 PUCHAR Var = (PUCHAR)Process;
                 ULONG64 cr3 = *(ULONG64*)(Var + 0x28);
-                DbgPrint("Address: %llx\n", Buffer->target_address);
-                DbgPrint("Cr3: %x\n", cr3);
+                //DbgPrint("Address: %llx\n", Buffer->target_address);
+                //DbgPrint("Cr3: %x\n", cr3);
                 ReadVirtualMemory(Index, cr3, (ULONG64)Buffer->target_address, Buffer->buffer_address, Buffer->Size);
                 //ReadVirtualMemory(Index, cr3, (ULONG64)Buffer->target_address, Buffer->buffer_address, Buffer->Size);
             }
@@ -183,8 +188,8 @@ NTSTATUS ctl_io(PDEVICE_OBJECT device_obj, PIRP irp) {
                 PsLookupProcessByProcessId((HANDLE)Buffer->target_pid, &Process);
                 PUCHAR Var = (PUCHAR)Process;
                 ULONG64 cr3 = *(ULONG64*)(Var + 0x28);
-                DbgPrint("Address: %llx\n", Buffer->target_address);
-                DbgPrint("Cr3: %x\n", cr3);
+                //DbgPrint("Address: %llx\n", Buffer->target_address);
+                //DbgPrint("Cr3: %x\n", cr3);
                 WriteVirtualMemory(Index, cr3, (ULONG64)Buffer->target_address, Buffer->buffer_address, Buffer->Size);
             }
             irp->IoStatus.Information = sizeof(UserData);
