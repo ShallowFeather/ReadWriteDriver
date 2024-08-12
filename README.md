@@ -9,9 +9,9 @@ Kernel Function 的 Offset 需自行替換 (MmAllocateIndependentPages, MiGetPte
 
 主要是因為懶得寫特徵去 call 下面也會講要怎麼找 offset。
 ## DEMO
-![gif](image\DEMO.gif)
+![gif](image/DEMO.gif)
 ## 實現細節
-![image](image\img1.png)
+![image](image/img1.png)
 此讀寫方式實現原理為先利用 MmAllocateIndependentPages 創建頁表 (為了不生成大頁表`PDE`) 且設為 `PTE` 的最大值。
 然後再去尋找要讀取的 process 當中的虛擬地址，並將他轉成物理地址。
 ```c=
@@ -62,7 +62,7 @@ ULONG64 TransformationCR3(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress)
 而由於需要 cr3 因此也需要獲取 PEPROCESS 結構才能夠得到 cr3，
 PEPROCESS 的 DTB 其實就是 Cr3，
 Cr3 的 offset 網路上都搜尋的到 這邊是 0x28。
-![image](image\img2.png)
+![image](image/img2.png)
 取得物理地址以後所需要的就剩讀取了。
 ```c=
 VOID ReadPhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
