@@ -75,7 +75,8 @@ VOID WritePhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
     //DbgPrint("Physical Address: 0x%x\n", phy);
     __invlpg(page->VirtualAddress);
     __movsb((PUCHAR)page->VirtualAddress + (phy & 0xFFF), (PUCHAR)buffer, size);
-
+    page->Pte->CacheDisable = 1;
+    page->Pte->WriteThrough = 1;
     page->Pte->PageFrameNumber = page->OldPageFrameNumber;
     __invlpg(page->VirtualAddress);
 }
