@@ -125,15 +125,29 @@ ULONG64 TransformationCR3(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress)
 }
 
 VOID ReadVirtualMemory(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress, PVOID Buffer, UINT64 size) {
-    ULONG64 PhysicalMemory = TransformationCR3(Index, cr3, VirtualAddress);
-    DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
-    ReadPhysicalAddress(Index, PhysicalMemory, Buffer, size);
+    UINT64 read = 0;
+    while (size) {
+        ULONG64 PhysicalMemory = TransformationCR3(Index, cr3, VirtualAddress + read);
+        if (PhysicalMemory == 0) break;
+        ULONG64 _read = min(PAGE_SIZE - (PhysicalMemory & 0xfff), size);
+        DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
+        ReadPhysicalAddress(Index, PhysicalMemory, (PVOID)((UINT_PTR)Buffer + read), _read);
+        read += _read;
+        size -= _read;
+    }
 }
 
 VOID WriteVirtualMemory(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress, PVOID Buffer, UINT64 size) {
-    ULONG64 PhysicalMemory = TransformationCR3(Index, cr3, VirtualAddress);
-    DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
-    WritePhysicalAddress(Index, PhysicalMemory, Buffer, size);
+    UINT64 write = 0;
+    while (size) {
+        ULONG64 PhysicalMemory = TransformationCR3(Index, cr3, VirtualAddress + write);
+        if (PhysicalMemory == 0) break;
+        ULONG64 _write = min(PAGE_SIZE - (PhysicalMemory & 0xfff), size);
+        DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
+        WritePhysicalAddress(Index, PhysicalMemory, (PVOID)((UINT_PTR)Buffer + write), _write);
+        write += _write;
+        size -= _write;
+    }
 }
 
 
