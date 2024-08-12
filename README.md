@@ -15,6 +15,7 @@ Kernel Function 的 Offset 需自行替換 (MmAllocateIndependentPages, MiGetPte
 ![gif](image/DEMO.gif)
 ## 實現細節
 ![image](image/img1.png)
+
 此讀寫方式實現原理為先利用 MmAllocateIndependentPages 創建頁表 (為了不生成大頁表`PDE`) 且設為 `PTE` 的最大值。
 
 然後再去尋找要讀取的 process 當中的虛擬地址，並將他轉成物理地址。
@@ -71,6 +72,7 @@ PEPROCESS 的 DTB 其實就是 Cr3，
 Cr3 的 offset 網路上都搜尋的到 這邊是 0x28。
 
 ![image](image/img2.png)
+
 取得物理地址以後所需要的就剩讀取了。
 ```c=
 VOID ReadPhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
@@ -112,4 +114,5 @@ multiprocessor 以及跨頁讀取
 或是其實也可以利用 windbg 然後搜尋該 function 也能獲取 offset
 ## Reference
 此專案為 https://bbs.kanxue.com/thread-279103.htm 此篇的概念實現。
+
 並參考 lyshark https://www.lyshark.com/post/19fe1026.html 此篇之 cr3 虛擬地址轉物理地址。
