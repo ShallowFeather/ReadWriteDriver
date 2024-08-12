@@ -1,8 +1,11 @@
 # R/W memory without Mmcopy & attach
 
 利用分頁機制切換 page frame number 並刷新 TLB 來讀寫物理記憶體。
+
 已實現 IOCTL 之溝通，可以自行替換。
+
 Kernel Function 的 Offset 需自行替換 (MmAllocateIndependentPages, MiGetPteAddress)
+
 目前預設為:
 - MmAllocateIndependentPages (ntoskrnl + 0xfd590)
 - MiGetPteAddress (ntoskrnl + 0xBA9F8)
@@ -13,6 +16,7 @@ Kernel Function 的 Offset 需自行替換 (MmAllocateIndependentPages, MiGetPte
 ## 實現細節
 ![image](image/img1.png)
 此讀寫方式實現原理為先利用 MmAllocateIndependentPages 創建頁表 (為了不生成大頁表`PDE`) 且設為 `PTE` 的最大值。
+
 然後再去尋找要讀取的 process 當中的虛擬地址，並將他轉成物理地址。
 ```c=
 ULONG64 TransformationCR3(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress)
@@ -59,9 +63,13 @@ ULONG64 TransformationCR3(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress)
 }
 ```
 藉由上述函數即可將 process 對應的虛擬地址轉換出來，
+
 而由於需要 cr3 因此也需要獲取 PEPROCESS 結構才能夠得到 cr3，
+
 PEPROCESS 的 DTB 其實就是 Cr3，
+
 Cr3 的 offset 網路上都搜尋的到 這邊是 0x28。
+
 ![image](image/img2.png)
 取得物理地址以後所需要的就剩讀取了。
 ```c=
@@ -77,7 +85,9 @@ VOID ReadPhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
 }
 ```
 可以看到首先獲取 page 以後將他的 pfn 改成物理地址的 pfn，
+
 修改之後刷新 TLB 讓修改生效就能夠取得記憶體當中的數值了，
+
 而寫入只需要將 `__movsb` 的值相反就能實現了。
 
 ## 問題
@@ -90,6 +100,16 @@ multiprocessor 以及跨頁讀取
 2. 跨頁讀取
 如果說讀寫記憶體時超過了 0xFFF 便會跨頁，那這個問題也很簡單，你沒辦法一次讀超過兩個頁表的內容就讀兩次，當超出範圍時就切到能讀的最大值然後再去讀下一段就好了 。
 
+## 找 ntoskrnl offset
+找 offset 很簡單
+
+把 ntoskrnl.exe 從系統裡面拉出來丟 IDA
+
+因為 ntoskrnl 用 IDA 開啟可以自動載入 PDB 因此很方便就能找出想要使用的 Function 位址
+
+![image](image/img3.png)
+
+或是其實也可以利用 windbg 然後搜尋該 function 也能獲取 offset
 ## Reference
 此專案為 https://bbs.kanxue.com/thread-279103.htm 此篇的概念實現。
 並參考 lyshark https://www.lyshark.com/post/19fe1026.html 此篇之 cr3 虛擬地址轉物理地址。
