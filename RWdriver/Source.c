@@ -9,7 +9,6 @@
 NTKERNELAPI NTSTATUS IoCreateDriver(PUNICODE_STRING DriverName, PDRIVER_INITIALIZE InitializationFunction);
 extern NTSYSAPI PVOID RtlPcToFileHeader(PVOID PcValue, PVOID* BaseOfImage);
 
-#define init_code CTL_CODE(FILE_DEVICE_UNKNOWN, 0x775, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 #define read_code CTL_CODE(FILE_DEVICE_UNKNOWN, 0x776, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 #define write_code CTL_CODE(FILE_DEVICE_UNKNOWN, 0x777, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 
@@ -68,6 +67,20 @@ VOID ReadPhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
     __invlpg(page->VirtualAddress);
 }
 
+VOID WritePhysicalAddress(UINT32 Index, ULONG64 phy, PVOID buffer, SIZE_T size)
+{
+    PageTable* page = &List[Index];
+    page->Pte->PageFrameNumber = phy >> PAGE_SHIFT;
+
+    //DbgPrint("Physical Address: 0x%x\n", phy);
+    __invlpg(page->VirtualAddress);
+    __movsb((PUCHAR)page->VirtualAddress + (phy & 0xFFF), (PUCHAR)buffer, size);
+
+    page->Pte->PageFrameNumber = page->OldPageFrameNumber;
+    __invlpg(page->VirtualAddress);
+}
+
+
 ULONG64 TransformationCR3(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress)
 {
     cr3 &= ~0xf;
@@ -111,14 +124,17 @@ ULONG64 TransformationCR3(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress)
     return address + PAGE_OFFSET;
 }
 
-VOID ReadVirtualMemory(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress, PVOID Buffer) {
-    UINT32 PageIndex = Index % 64;
-    ULONG64 PhysicalMemory = TransformationCR3(PageIndex, cr3, VirtualAddress);
+VOID ReadVirtualMemory(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress, PVOID Buffer, UINT64 size) {
+    ULONG64 PhysicalMemory = TransformationCR3(Index, cr3, VirtualAddress);
     DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
-    ReadPhysicalAddress(Index, PhysicalMemory, Buffer, sizeof(Buffer));
+    ReadPhysicalAddress(Index, PhysicalMemory, Buffer, size);
 }
 
-
+VOID WriteVirtualMemory(UINT32 Index, ULONG64 cr3, ULONG64 VirtualAddress, PVOID Buffer, UINT64 size) {
+    ULONG64 PhysicalMemory = TransformationCR3(Index, cr3, VirtualAddress);
+    DbgPrint("PhysicalMemory: %p\n", PhysicalMemory);
+    WritePhysicalAddress(Index, PhysicalMemory, Buffer, size);
+}
 
 
 NTSTATUS ctl_io(PDEVICE_OBJECT device_obj, PIRP irp) {
@@ -133,21 +149,7 @@ NTSTATUS ctl_io(PDEVICE_OBJECT device_obj, PIRP irp) {
     if (stack) {
         if (Buffer && sizeof(*Buffer) >= sizeof(UserData)) {
             ULONG ctl_code = stack->Parameters.DeviceIoControl.IoControlCode;
-            if (ctl_code == init_code) {
-                /*
-                DbgPrint("Init\n");
-                for (int i = 0; i < 64; i++) {
-                    List[i].VirtualAddress = MmAllocateIndependentPages(0x1000, -1);
-                    memset(List[i].VirtualAddress, 0, 0x1000);
-                    List[i].Pte = MiGetPteAddress(List[i].VirtualAddress);
-                    DbgPrint("Pte: %x\n", List[i].Pte);
-                    List[i].OldPageFrameNumber = List[i].Pte->PageFrameNumber;
-                }
-                PsLookupProcessByProcessId((HANDLE)Buffer->target_pid, &Process);
-                cr3 = *(ULONG64*)(Process + 0x28); 
-                */
-            }
-            else if (ctl_code == read_code) {
+            if (ctl_code == read_code) {
                 DbgPrint("READ\n");
                 UINT32 Index = KeGetCurrentProcessorIndex();
                 PEPROCESS Process;
@@ -162,6 +164,13 @@ NTSTATUS ctl_io(PDEVICE_OBJECT device_obj, PIRP irp) {
             else if (ctl_code == write_code) {
                 DbgPrint("WRITE\n");
                 UINT32 Index = KeGetCurrentProcessorIndex();
+                PEPROCESS Process;
+                PsLookupProcessByProcessId((HANDLE)Buffer->target_pid, &Process);
+                PUCHAR Var = (PUCHAR)Process;
+                ULONG64 cr3 = *(ULONG64*)(Var + 0x28);
+                DbgPrint("Address: %llx\n", Buffer->target_address);
+                DbgPrint("Cr3: %x\n", cr3);
+                WriteVirtualMemory(Index, cr3, (ULONG64)Buffer->target_address, Buffer->buffer_address, Buffer->Size);
             }
             irp->IoStatus.Information = sizeof(UserData);
         }
