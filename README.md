@@ -1,5 +1,7 @@
 # R/W memory without Mmcopy & attach
 
+> 補 剛剛測試過結合 https://github.com/Rythorndoran/enum_real_dirbase 此專案可讀 apex 記憶體
+
 利用分頁機制切換 page frame number 並刷新 TLB 來讀寫物理記憶體。
 
 已實現 IOCTL 之溝通，可以自行替換。
